@@ -1,1 +1,23 @@
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  business_type TEXT NOT NULL DEFAULT 'general',
+  salt TEXT NOT NULL,
+  pass_hash TEXT NOT NULL,
+  plan TEXT NOT NULL DEFAULT 'free',
+  plan_expires INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  method TEXT NOT NULL,
+  amount REAL NOT NULL,
+  order_code TEXT NOT NULL,
+  tx_ref TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at INTEGER NOT NULL
+);
 
