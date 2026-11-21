@@ -119,6 +119,42 @@ export async function onRequest({ request, env, params }) {
     return json({ user: publicUser(u) });
   }
 
-  return json({ error: "no_encontrado" }, 404);
-}
+  if (route === "products" || route.startsWith("products/")) {
+    const uid = await getUserId(env, request);
+    if (!uid) return json({ error: "sin_sesion" }, 401);
+    const u = await db.prepare("SELECT * FROM users WHERE id=?").bind(uid).first();
+    if (!u) return json({ error: "sin_sesion" }, 401);
+    const id = Number(route.split("/")[1]) || 0;
+    if (method === "GET" && !id) {
+      const { results } = await db.prepare("SELECT * FROM products WHERE user_id=? ORDER BY id DESC").bind(uid).all();
+      return json({ products: results });
+    }
+    if (method === "DELETE" && id) {
+      await db.prepare("DELETE FROM products WHERE id=? AND user_id=?").bind(id, uid).run();
+      return json({ ok: true });
+    }
+    if ((method === "POST" && !id) || (method === "PUT" && id)) {
+      const b = await request.json().catch(() => ({}));
+      const name = String(b.name || "").trim().slice(0, 80);
+      const cost = Number(b.cost), price = Number(b.price);
+      const stock = Math.floor(Number(b.stock)), min = Math.floor(Number(b.min_stock ?? 5));
+      if (!name) return json({ error: "nombre_requerido" }, 400);
+      if (![cost, price, stock, min].every(Number.isFinite) || cost < 0 || price < 0 || stock < 0 || min < 0)
+        return json({ error: "datos_invalidos" }, 400);
+      if (method === "POST") {
+        const lim = LIMITS[isPro(u) ? "pro" : "free"].products;
+        const n = (await db.prepare("SELECT COUNT(*) c FROM products WHERE user_id=?").bind(uid).first()).c;
+        if (lim !== null && n >= lim) return json({ error: "limite_plan", limit: lim }, 403);
+        await db.prepare("INSERT INTO products (user_id,name,cost,price,stock,min_stock,created_at) VALUES (?,?,?,?,?,?,?)")
+          .bind(uid, name, cost, price, stock, min, Date.now()).run();
+      } else {
+        await db.prepare("UPDATE products SET name=?,cost=?,price=?,stock=?,min_stock=? WHERE id=? AND user_id=?")
+          .bind(name, cost, price, stock, min, id, uid).run();
+      }
+      return json({ ok: true }, method === "POST" ? 201 : 200);
+    }
+  }
 
+  return json({ error: "no_encontrado" }, 404);
+                                }
+      
