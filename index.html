@@ -27,7 +27,7 @@ input:focus,select:focus{outline:0;border-color:var(--p);box-shadow:0 0 0 3px #4
 .badge.pro{background:linear-gradient(90deg,#f59e0b,#ef4444);color:#fff}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
 .f{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;position:relative;animation:up .5s ease both;transition:.2s}
-.f:hover{transform:translateY(-3px)}
+.f:hover{transform:translateY(-3px)}.go{cursor:pointer}
 .f b{display:block;font-size:1.6rem;margin-bottom:6px}.f span{font-size:.9rem;font-weight:600}
 .f.lock{opacity:.75;cursor:pointer}.f.lock::after{content:"🔒";position:absolute;top:10px;right:12px}
 .sec{margin:20px 0 0;font-weight:700}
@@ -37,7 +37,7 @@ input:focus,select:focus{outline:0;border-color:var(--p);box-shadow:0 0 0 3px #4
 <script>
 const $=s=>document.querySelector(s),app=$('#app');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ERR={correo_invalido:'Correo no válido',nombre_requerido:'Escribe tu nombre',clave_corta:'La contraseña necesita 8 caracteres o más',correo_en_uso:'Ese correo ya está registrado',credenciales_incorrectas:'Correo o contraseña incorrectos',config_incompleta:'Falta configurar el servidor'};
+const ERR={correo_invalido:'Correo no válido',nombre_requerido:'Escribe tu nombre',clave_corta:'La contraseña necesita 8 caracteres o más',correo_en_uso:'Ese correo ya está registrado',credenciales_incorrectas:'Correo o contraseña incorrectos',datos_invalidos:'Revisa los números',config_incompleta:'Falta configurar el servidor'};
 const FREE=[['📦','Productos y stock'],['🛒','Ventas'],['💸','Gastos'],['📈','Ganancias y márgenes']];
 const PRO={reportes:['📊','Reportes y gráficas'],fiados:['🧾','Fiados y deudas'],exportar:['📤','Exportar PDF/Excel'],empleados:['👥','Empleados'],multinegocio:['🏪','Varios negocios'],multimoneda:['💱','CUP / USD / USDT'],respaldo:['☁️','Copia de seguridad']};
 async function api(p,m='GET',b){const r=await fetch('/api/'+p,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});return{ok:r.ok,d:await r.json().catch(()=>({}))}}
@@ -67,11 +67,34 @@ function home(u){
  <div class="card"><span class="badge ${pro?'pro':''}">${pro?'PLAN PRO':'PLAN GRATIS'}</span><h2>Hola, ${esc(u.name)} 👋</h2>
  <p class="mut">Productos permitidos: ${lim}${pro?' · vence '+new Date(u.plan_expires).toLocaleDateString():''}</p>
  ${pro?'':'<button class="btn" id="up">Desbloquear todo con Pro</button>'}</div>
- <p class="sec">Incluido en tu plan</p><div class="grid">${FREE.map((f,i)=>`<div class="f" style="animation-delay:${i*70}ms"><b>${f[0]}</b><span>${f[1]}</span></div>`).join('')}</div>
+ <p class="sec">Incluido en tu plan</p><div class="grid">${FREE.map((f,i)=>`<div class="f go" data-i="${i}" style="animation-delay:${i*70}ms"><b>${f[0]}</b><span>${f[1]}</span></div>`).join('')}</div>
  ${u.locked_features.length?`<p class="sec">Funciones Pro</p><div class="grid">${u.locked_features.map((k,i)=>`<div class="f lock" style="animation-delay:${i*70}ms"><b>${PRO[k][0]}</b><span>${PRO[k][1]}</span></div>`).join('')}</div>`:''}`;
  $('#out').onclick=async()=>{await api('logout','POST');auth()};
+ document.querySelectorAll('.go').forEach(e=>e.onclick=()=>+e.dataset.i===0?prods(u):toast('Este módulo llega pronto'));
  const soon=()=>toast('Los pagos se conectan en la próxima parte');
  if($('#up'))$('#up').onclick=soon;document.querySelectorAll('.lock').forEach(e=>e.onclick=soon);
+}
+async function prods(u){
+ const r=await api('products'),L=r.d.products||[],lim=u.limits.products;
+ const m=n=>(Math.round(n*100)/100).toLocaleString();
+ const tot=L.reduce((s,p)=>s+(p.price-p.cost)*p.stock,0);
+ app.innerHTML=`<div class="top"><button class="out" id="bk">← Volver</button><span class="mut">${L.length}/${lim===null?'∞':lim} productos</span></div>
+ <div class="card"><h2>📦 Productos y stock</h2><p class="mut">Ganancia potencial del stock: <b>${m(tot)}</b></p><div id="fm"></div><button class="btn" id="add">+ Nuevo producto</button></div>
+ ${L.map((p,i)=>{const g=p.price-p.cost,low=p.stock<=p.min_stock;return `<div class="f" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:1.05rem;margin:0">${esc(p.name)}</b><span class="badge" style="${low?'background:#fee2e2;color:#b91c1c':''}">${p.stock} en stock${low?' ⚠️':''}</span></div><p class="mut" style="margin:8px 0">Compra ${m(p.cost)} · Venta ${m(p.price)} · Ganancia ${m(g)} (${p.price>0?Math.round(g/p.price*100):0}%)</p><button class="out" data-e="${i}">Editar</button> <button class="out" data-d="${p.id}">Eliminar</button></div>`}).join('')||'<p class="mut" style="margin-top:14px">Aún no tienes productos. Agrega el primero.</p>'}`;
+ $('#bk').onclick=()=>home(u);
+ const form=p=>{
+  $('#add').style.display='none';
+  $('#fm').innerHTML=`<input id="pn" placeholder="Nombre del producto" value="${esc(p.name||'')}"><input id="pc" type="number" inputmode="decimal" placeholder="Precio de compra" value="${p.cost??''}"><input id="pp" type="number" inputmode="decimal" placeholder="Precio de venta" value="${p.price??''}"><input id="ps" type="number" inputmode="numeric" placeholder="Cantidad en stock" value="${p.stock??''}"><input id="pm" type="number" inputmode="numeric" placeholder="Avisar si quedan menos de" value="${p.min_stock??5}"><div class="err" id="err"></div><button class="btn" id="sv">Guardar</button>`;
+  $('#sv').onclick=async()=>{
+   const b={name:$('#pn').value,cost:$('#pc').value,price:$('#pp').value,stock:$('#ps').value,min_stock:$('#pm').value};
+   if(!b.name||b.cost===''||b.price===''||b.stock==='')return $('#err').textContent='Completa todos los campos';
+   const x=await api(p.id?'products/'+p.id:'products',p.id?'PUT':'POST',b);
+   if(x.ok)prods(u);else $('#err').textContent=x.d.error==='limite_plan'?'Llegaste al límite de '+x.d.limit+' productos del plan gratis. Pasa a Pro para tener ilimitados.':(ERR[x.d.error]||'Revisa los datos');
+  };
+ };
+ $('#add').onclick=()=>form({});
+ document.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{form(L[+b.dataset.e]);scrollTo(0,0)});
+ document.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{if(confirm('¿Eliminar este producto?')){await api('products/'+b.dataset.d,'DELETE');prods(u)}});
 }
 api('me').then(r=>r.ok?home(r.d.user):auth());
 </script></body></html>
